@@ -1,0 +1,38 @@
+debug = false
+
+logLevel = "ERROR"
+defaultEntryPoints = ["https", "http"]
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+    [entryPoints.http.redirect]
+    entryPoint = "https"
+  [entryPoints.https]
+  address = ":443"
+  [entryPoints.https.tls]
+
+[retry]
+
+[web]
+address = ":8080"
+
+[docker]
+endpoint = "unix:///var/run/docker.sock"
+domain = YOUR_DOMAIN
+watch = true
+exposedbydefault = false #This will force you to use traefik.enable=true label in docker compose to put apps behind traefik.
+
+[acme]
+caServer = "https://acme-v02.api.letsencrypt.org/directory"
+email = YOUR_MAIL_ADDRESS
+storage = ACME_JSON_FILE_PATH
+entryPoint = "https"
+acmeLogging=true
+onDemand = false
+OnHostRule = true
+  [acme.httpChallenge]
+  entryPoint = "http"
+
+[[acme.domains]]
+  main = YOUR_DOMAIN

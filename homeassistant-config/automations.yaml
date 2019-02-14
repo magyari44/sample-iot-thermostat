@@ -1,0 +1,29 @@
+- id: '1547156885671'
+  alias: Termosztát éjszakai mód
+  trigger:
+  - at: 00:00:00
+    platform: time
+  condition: []
+  action:
+  - data:
+      away_mode: 'true'
+      entity_id: climate.study
+    service: climate.set_away_mode
+  - data:
+      entity_id: switch.study_heater_backlight
+    service: switch.turn_off
+- id: '1547234453258'
+  alias: Éjszakai mód kilépés
+  trigger:
+  - at: 08:30:00
+    platform: time
+  condition: []
+  action:
+  - data:
+      away_mode: 'false'
+      entity_id: climate.study
+    service: climate.set_away_mode
+  - data:
+      entity_id: switch.study_heater_backlight
+    service: switch.turn_on
+

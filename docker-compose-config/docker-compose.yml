@@ -1,0 +1,124 @@
+version: "3"
+
+services:
+
+  redis:
+    image: arm32v7/redis
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ${YOUR_PATH_TO_REDIS_CONFIG}:/usr/local/etc/redis/redis.conf
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      swarmtestnetwork:
+
+  reverse-proxy:
+    image: traefik
+    command: --docker \
+      --docker.swarmmode \
+      --docker.watch \
+      --web \
+      --loglevel=DEBUG
+    networks:
+      - swarmtestnetwork
+    ports:
+      - 9090:8080
+      - 443:443
+      - 90:8123
+      - 80:80
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${YOUR_PATH_TO_TRAEFIK_CONFIG}:/etc/traefik
+    deploy:
+      restart_policy:
+        condition: any
+      mode: replicated
+      replicas: 1
+      update_config:
+        delay: 2s
+      placement:
+        constraints: [node.role == manager]
+
+  emq-master:
+    image: emqx:latest
+    volumes:
+      - ${YOUR_PATH_TO_CERTS}:/opt/emqx/etc/certs/
+      - log:/opt/emqx/log
+    environment:
+      - "EMQX_NAME=emq"
+      - "EMQX_HOST=master.mq.tt"
+      - "EMQX_NODE__COOKIE=ef16465f66804df1cc9772f6456e2342"
+      - "EMQX_ALLOW_ANONYMOUS=false"
+      - "EMQX_LOADED_PLUGINS=emqx_auth_redis,emqx_recon,emqx_retainer,emqx_management,emqx_dashboard"      
+      - "EMQX_AUTH__REDIS__SERVER=redis:6379"
+      - "EMQX_AUTH__REDIS__PASSWORD=${YOUR_REDIS_PASSWORD}"
+      - "EMQX_AUTH__REDIS__PASSWORD_HASH=plain"
+      - "EMQX_DASHBOARD__DEFAULT_USER__LOGIN=${YOUR_EMQX_DASHBOARD_USER}"
+      - "EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=${YOUR_EMQX_DASHBOARD_PASSWORD}"
+    networks:
+      swarmtestnetwork:
+        aliases:
+          - master.mq.tt
+    depends_on:
+      - redis
+    ports:
+      - 18088:18083
+      - 8083:8083
+      - 1888:1883
+      - 8084:8084
+      - 8883:8883
+    deploy:
+     restart_policy:
+       condition: any
+     labels:
+       - "traefik.docker.network=test_swarmtestnetwork" 
+
+  home-assistant-swarm:
+    image: homeassistant/raspberrypi3-homeassistant:latest
+    networks:
+      - swarmtestnetwork
+    ports:
+      - "8123"
+    volumes:
+      - ${YOUR_HOME_ASSISTANT_CONFIG}:/config
+      - /etc/localtime:/etc/localtime:ro
+    deploy:
+      restart_policy:
+        condition: any
+      mode: replicated
+      replicas: 1
+      update_config:
+        delay: 2s
+      labels:
+        - "traefik.docker.network=test_swarmtestnetwork"
+        - "traefik.port=8123"
+        - "traefik.frontend.rule=PathPrefix:/;"
+        - "traefik.backend.loadbalancer.stickiness=true"
+    depends_on:
+      - redis
+      - reverse-proxy
+      - emq-master
+
+  emq-worker:
+    image: emqx:latest
+    volumes:
+      - /home/emqx-conf/certs/:/opt/emqx/etc/certs/
+    environment:
+      - "EMQX_JOIN_CLUSTER=emq@master.mq.tt"
+      - "EMQX_NODE__COOKIE=ef16465f66804df1cc9772f6456e2342"
+    depends_on:
+     - emq-master
+    networks:
+      swarmtestnetwork:
+    deploy:
+      mode: replicated
+      replicas: 1
+
+volumes:
+  log:
+  redis-data:		 
+
+networks:
+  swarmtestnetwork:
+
